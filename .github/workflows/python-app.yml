@@ -39,3 +39,7 @@ jobs:
         echo "Test document" > test.txt
         curl -X POST -F "file=@test.txt" http://localhost:5000/convert-to-pdf --output out.pdf
         test -s out.pdf  # check if file is non-empty
+
+    - name: Show Flask logs (for debugging)
+      if: always()
+      run: cat flask.log
