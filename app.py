@@ -1,39 +1,33 @@
 from flask import Flask, request, send_file
-import subprocess
 import os
+import subprocess
 
 app = Flask(__name__)
 
+UPLOAD_FOLDER = 'uploads'
+OUTPUT_FOLDER = 'outputs'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
 @app.route('/convert-to-pdf', methods=['POST'])
 def convert_to_pdf():
-    uploaded_file = request.files.get('file')
-    if not uploaded_file:
-        return 'No file uploaded', 400
+    if 'file' not in request.files:
+        return "No file part", 400
+    file = request.files['file']
+    if file.filename == '':
+        return "No selected file", 400
 
-    input_path = f"/tmp/{uploaded_file.filename}"
-    output_path = input_path.rsplit('.', 1)[0] + ".pdf"
-
-    uploaded_file.save(input_path)
+    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(filepath)
 
     try:
-        result = subprocess.run(
-            ["unoconv", "-f", "pdf", input_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True
-        )
-        print("Unoconv output:", result.stdout)
-        print("Unoconv error (if any):", result.stderr)
+        # LibreOffice/unoconv kullanarak dönüştürme
+        output_path = os.path.join(OUTPUT_FOLDER, os.path.splitext(file.filename)[0] + '.pdf')
+        result = subprocess.run(['unoconv', '-f', 'pdf', '-o', output_path, filepath], capture_output=True, text=True)
 
-        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-            return "PDF conversion failed or resulted in empty file.", 500
+        if result.returncode != 0:
+            return f"Conversion failed:\n{result.stderr}", 500
 
         return send_file(output_path, as_attachment=True)
-
-    except subprocess.CalledProcessError as e:
-        print("Error during conversion:", e.stderr)
-        return f"Conversion failed: {e.stderr}", 500
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    except Exception as e:
+        return f"Exception occurred: {str(e)}", 500
